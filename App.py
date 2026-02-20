@@ -46,7 +46,7 @@ sentiment_score = sum(TextBlob(h).sentiment.polarity for h in headlines) / len(h
 sentiment_label = "Positive" if sentiment_score > 0 else "Negative"
 
 # 5. Top Metrics
-st.title("📈 Intelligent Market Outlook & Risk Monitor")
+st.title("📈 Stock NIFTY 50 Prediction using LSTM Model")
 col1, col2, col3 = st.columns(3)
 
 with col1:
