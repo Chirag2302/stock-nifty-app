@@ -4,97 +4,76 @@ import mplfinance as mpf
 import pandas as pd
 from textblob import TextBlob
 
-# 1. Page Config
-st.set_page_config(page_title="Stock NIFTY 50 Prediction using LSTM Model", layout="wide")
+st.set_page_config(page_title="MarketSense AI", layout="wide")
 
-# 2. Sidebar
-st.sidebar.title("🛡️ MarketSense AI")
-role = st.sidebar.selectbox("Select User Role", ["Retail Investor", "Analyst", "Institutional User"])
-st.sidebar.success(f"Logged in as: {role}")
+# Sidebar
+st.sidebar.title("MarketSense AI")
+role = st.sidebar.selectbox("Select Role", ["Retail Investor", "Analyst", "Institutional"])
+st.sidebar.write(f"Logged in as: {role}")
 
-# 3. Data Loading
+# Load Data
 @st.cache_data
 def load_data():
     try:
-        df = yf.download("^NSEI", period="5y", interval="1d", progress=False)
-        if df.empty:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        df.index = pd.to_datetime(df.index)
+        df = yf.download("^NSEI", period="5y", interval="1d", auto_adjust=True)
+        df.dropna(inplace=True)
         return df
     except Exception as e:
-        st.error(f"Data download error: {e}")
+        st.error(e)
         return None
 
 df = load_data()
 
-# 🛑 STOP APP IF DATA FAILED
-if df is None:
-    st.error("❌ Unable to fetch market data. Check internet or try again later.")
+if df is None or df.empty:
+    st.error("❌ Data load failed")
     st.stop()
 
-if 'Close' not in df.columns:
-    st.error(f"'Close' column missing. Columns found: {list(df.columns)}")
+# Ensure columns
+required_cols = ['Open','High','Low','Close','Volume']
+if not all(col in df.columns for col in required_cols):
+    st.error("❌ Data format issue")
     st.stop()
 
 current_price = df['Close'].iloc[-1]
 
-# 4. Sentiment Calculation
-headlines = ["Market shows resilience", "NIFTY hits new high", "Global stocks rally"]
-sentiment_score = sum(TextBlob(h).sentiment.polarity for h in headlines) / len(headlines)
+# Sentiment
+headlines = ["Market shows resilience", "NIFTY hits new high", "Global rally"]
+sentiment_score = sum(TextBlob(h).sentiment.polarity for h in headlines)/len(headlines)
 sentiment_label = "Positive" if sentiment_score > 0 else "Negative"
 
-# 5. Top Metrics
-st.title("📈 Stock NIFTY 50 Prediction using LSTM Model")
+# UI
+st.title("📈 NIFTY 50 Dashboard")
+
 col1, col2, col3 = st.columns(3)
 
-with col1:
-    st.metric("Index: NIFTY 50", f"{current_price:.2f}")
+col1.metric("NIFTY 50", f"{current_price:.2f}")
+prediction = current_price * 1.005
+col2.metric("Prediction", f"{prediction:.2f}", "+0.5%")
+col3.metric("Sentiment", sentiment_label)
 
-with col2:
-    prediction = current_price + (current_price * 0.005)
-    st.metric("AI Prediction (Next Day)", f"{prediction:.2f}", "+0.5%")
-
-with col3:
-    st.metric("Sentiment Pulse", sentiment_label, f"Score: {sentiment_score:.2f}")
-
-# 6. Sentiment Panel
-st.subheader("📰 Sentiment Intelligence Panel")
-st.info(f"Today's Analysis: Market sentiment is {sentiment_label}.")
-
-# 7. Charts
-st.subheader("📊 Multi-Timeframe Market Analysis")
-tab1, tab2, tab3, tab4 = st.tabs(["Daily", "Monthly", "Quarterly", "Yearly"])
-
-def plot_chart(data, title):
-    if data.empty:
-        st.warning(f"No data available for {title}")
-        return
-    fig, _ = mpf.plot(data, type='candle', style='charles', returnfig=True, volume=True)
+# Chart Function (FIXED)
+def plot_chart(data):
+    data = data[['Open','High','Low','Close','Volume']].dropna()
+    fig, _ = mpf.plot(data, type='candle', returnfig=True, volume=True)
     st.pyplot(fig)
 
+# Tabs
+tab1, tab2, tab3, tab4 = st.tabs(["Daily","Monthly","Quarterly","Yearly"])
+
 with tab1:
-    plot_chart(df.tail(60), "Daily View")
+    plot_chart(df.tail(60))
 
 with tab2:
-    df_monthly = df.resample('M').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
-    plot_chart(df_monthly, "Monthly View")
+    plot_chart(df.resample('M').agg({
+        'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'
+    }))
 
 with tab3:
-    df_quarterly = df.resample('Q').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
-    plot_chart(df_quarterly, "Quarterly View")
+    plot_chart(df.resample('Q').agg({
+        'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'
+    }))
 
 with tab4:
-    df_yearly = df.resample('Y').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
-    plot_chart(df_yearly, "Yearly View")
-
-# 8. Alerts
-st.subheader("🔔 Risk Monitor & Alerts")
-if sentiment_score > 0:
-    st.success("Market Confidence: High.")
-else:
-    st.warning("Volatility Warning: Low sentiment detected.")
-
-st.divider()
-st.caption("Powered by LSTM & Sentiment Analysis | Data: Yahoo Finance")
+    plot_chart(df.resample('Y').agg({
+        'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'
+    }))
