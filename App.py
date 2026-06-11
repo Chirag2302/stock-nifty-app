@@ -16,22 +16,28 @@ st.sidebar.success(f"Logged in as: {role}")
 @st.cache_data
 def load_data():
     try:
+        # Download data without auto_adjust to keep standard OHLC names, or handle multi-index safely
         df = yf.download("^NSEI", period="5y", interval="1d", auto_adjust=True, threads=False)
 
         # FIX: empty data fallback
         if df is None or df.empty:
             return None
 
-        # FIX: multi-index
+        # FIX: Robust multi-index flattening for newer yfinance versions
         if isinstance(df.columns, pd.MultiIndex):
+            # If columns look like ('Close', '^NSEI'), we want the first level ('Close')
             df.columns = df.columns.get_level_values(0)
-
-        df = df[['Open','High','Low','Close','Volume']]
-        df.dropna(inplace=True)
+        
+        # Ensure standard column names are present
+        required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        df = df[required_cols]
+        df = df.dropna()
 
         return df
 
     except Exception as e:
+        # Useful for debugging if it fails elsewhere
+        st.sidebar.error(f"Data load error: {e}")
         return None
 
 df = load_data()
@@ -51,8 +57,8 @@ try:
 
     current_price = float(close_series.iloc[-1])
 
-except Exception:
-    st.error("❌ Error calculating current price")
+except Exception as e:
+    st.error(f"❌ Error calculating current price: {e}")
     st.stop()
 
 # ---------------- SENTIMENT ----------------
@@ -111,17 +117,17 @@ with tab1:
     plot_chart(df.tail(60), "Daily")
 
 with tab2:
-    plot_chart(df.resample('M').agg({
+    plot_chart(df.resample('ME').agg({
         'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'
     }), "Monthly")
 
 with tab3:
-    plot_chart(df.resample('Q').agg({
+    plot_chart(df.resample('QE').agg({
         'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'
     }), "Quarterly")
 
 with tab4:
-    plot_chart(df.resample('Y').agg({
+    plot_chart(df.resample('YE').agg({
         'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'
     }), "Yearly")
 
